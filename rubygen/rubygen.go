@@ -202,7 +202,7 @@ func writeRubyClass(b *strings.Builder, cls *rubyClass) {
 // syntax error), so it falls back to a sanitized, valid name instead.
 func rubyAccessorName(wireName string) string {
 	name := strings.ReplaceAll(wireName, "-", "_")
-	if rubyIdentifier(name) {
+	if rubyIdentifier(name) && !dangerousObjectMethods[name] {
 		return name
 	}
 	return "field_" + sanitizeForIdentifier(name)

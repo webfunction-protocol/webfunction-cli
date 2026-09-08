@@ -105,7 +105,28 @@ func recordKey(name string) string {
 	return fmt.Sprintf("%q:", name)
 }
 
-// clientReserved is the fixed, non-endpoint surface every generated sig
+// dangerousObjectMethods are real Object/Kernel instance methods that
+// Ruby's runtime and GC rely on - silently overriding one on a
+// generated accessor or Client method is a genuine correctness risk,
+// not just a style concern (confirmed the hard way: a real merchants
+// API field literally named "object_id" triggered Ruby's own
+// "redefining 'object_id' may cause serious problems" warning on a
+// generated accessor). Any wire name matching one of these falls back
+// to a safe, prefixed name instead, the same as an invalid-identifier
+// name does.
+var dangerousObjectMethods = map[string]bool{
+	"object_id": true, "class": true, "hash": true, "freeze": true,
+	"frozen?": true, "dup": true, "clone": true, "send": true,
+	"__send__": true, "public_send": true, "instance_of?": true,
+	"is_a?": true, "kind_of?": true, "respond_to?": true, "equal?": true,
+	"eql?": true, "inspect": true, "to_s": true, "method": true,
+	"methods": true, "nil?": true, "tap": true, "then": true,
+	"instance_eval": true, "instance_exec": true, "extend": true,
+	"singleton_class": true, "instance_variable_get": true,
+	"instance_variable_set": true, "define_singleton_method": true,
+	"itself": true, "display": true,
+}
+
 // declares on WebFunction::Client (the real gem's own fixed API - call,
 // package, mutators - confirmed directly from client.rb) plus BasicObject
 // survivors (nil?, methods). An endpoint literally named one of these
@@ -122,7 +143,7 @@ var clientReserved = map[string]bool{
 // package's own endpoints.
 func uniqueMethodName(used map[string]bool, name string) string {
 	candidate := name
-	if clientReserved[candidate] {
+	if clientReserved[candidate] || dangerousObjectMethods[candidate] {
 		candidate += "2"
 	}
 	for i := 2; used[candidate]; i++ {
