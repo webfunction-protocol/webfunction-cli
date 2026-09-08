@@ -6,11 +6,14 @@ import (
 	"os"
 
 	"github.com/webfunction-protocol/webfunction-go"
+	"path/filepath"
+	"strings"
 	"wfn/csharpgen"
 	"wfn/gogen"
 	"wfn/javagen"
 	"wfn/jsgen"
 	"wfn/phpgen"
+	"wfn/rubygen"
 )
 
 func init() {
@@ -20,7 +23,7 @@ func init() {
 // validTargets is the set of languages codegen currently knows how to
 // generate. Keep this in sync with whatever the generator actually
 // implements.
-var validTargets = []string{"java", "go", "php", "js", "csharp"}
+var validTargets = []string{"java", "go", "php", "js", "csharp", "ruby"}
 
 // defaultNamespace is --namespace's default, used by any target that
 // needs one (php, go, java, csharp).
@@ -46,7 +49,12 @@ Flags (all required):
   -o           Output file to write the generated code to
 
 Flags (optional):
-  --namespace  Namespace for the generated class (currently for: php, go, java, csharp). Default: ` + defaultNamespace + `
+  --namespace  Namespace/module for the generated class (currently for: php, go, java, csharp, ruby). Default: ` + defaultNamespace + `
+
+Note: --target ruby writes TWO files - the -o path (a .rb source file with
+a real generated wrapper class) plus a companion .rbs signature file at
+the same path with its extension replaced by .rbs (e.g. -o client.rb also
+writes client.rbs alongside it).
 
 Example:
   wfn codegen --target java --url https://example.com/some-package -o client.java`
@@ -95,6 +103,7 @@ func (c *CodegenCommand) Run(args []string) error {
 	fmt.Printf("Fetched %s (%d endpoint(s)) from %s\n", name, len(pkg.Endpoints), *url)
 
 	var source string
+	var rubyRbs string
 	switch *target {
 	case "js":
 		source, err = jsgen.Generate(pkg, *url)
@@ -121,6 +130,11 @@ func (c *CodegenCommand) Run(args []string) error {
 		if err != nil {
 			return fmt.Errorf("generating csharp: %w", err)
 		}
+	case "ruby":
+		source, rubyRbs, err = rubygen.Generate(pkg, *url, *namespace)
+		if err != nil {
+			return fmt.Errorf("generating ruby: %w", err)
+		}
 	default:
 		// isValidTarget already restricts *target to validTargets, so
 		// this is unreachable in practice - kept as a safety net.
@@ -131,6 +145,14 @@ func (c *CodegenCommand) Run(args []string) error {
 		return fmt.Errorf("writing %s: %w", *output, err)
 	}
 	fmt.Printf("Wrote %s\n", *output)
+
+	if *target == "ruby" {
+		rbsPath := strings.TrimSuffix(*output, filepath.Ext(*output)) + ".rbs"
+		if err := os.WriteFile(rbsPath, []byte(rubyRbs), 0o644); err != nil {
+			return fmt.Errorf("writing %s: %w", rbsPath, err)
+		}
+		fmt.Printf("Wrote %s\n", rbsPath)
+	}
 	return nil
 }
 
