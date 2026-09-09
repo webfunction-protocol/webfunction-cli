@@ -128,6 +128,18 @@ func writeTypedPageClass(b *strings.Builder) {
   # item_class (or leaving it untouched if item_class is nil, for a
   # bare scalar-item pagination). Recurses through next_page/previous_page
   # so pagination stays typed across every page, not just the first.
+  #
+  # The real gem only wraps a response in Page when it strictly matches
+  # its own pagination-envelope shape (confirmed from the real
+  # page.rb/request.rb source: a Hash with "page"/"next"/"previous" keys
+  # present, "page" an Array, "next"/"previous" each nil or a Hash) -
+  # otherwise Request#execute returns the raw decoded value completely
+  # unwrapped. A real API can plausibly fail that check for an edge case
+  # the real gem's author didn't anticipate (e.g. a zero-result response
+  # that omits the "next"/"previous" keys entirely rather than nulling
+  # them) - every method here checks respond_to? first and degrades to a
+  # single, final page of whatever raw data is actually present, rather
+  # than raising deep inside here when that happens.
   class TypedPage
     include Enumerable
 
@@ -137,23 +149,32 @@ func writeTypedPageClass(b *strings.Builder) {
     end
 
     def page
+      unless @real_page.respond_to?(:page)
+        raw_items = @real_page.is_a?(Hash) ? (@real_page["page"] || []) : Array(@real_page)
+        return @item_class ? raw_items.map { |item| @item_class.new(item) } : raw_items
+      end
+
       @item_class ? @real_page.page.map { |item| @item_class.new(item) } : @real_page.page
     end
 
     def next?
-      @real_page.next?
+      @real_page.respond_to?(:next?) ? @real_page.next? : false
     end
 
     def previous?
-      @real_page.previous?
+      @real_page.respond_to?(:previous?) ? @real_page.previous? : false
     end
 
     def next_page
+      return nil unless @real_page.respond_to?(:next_page)
+
       next_real = @real_page.next_page
       next_real && TypedPage.new(next_real, @item_class)
     end
 
     def previous_page
+      return nil unless @real_page.respond_to?(:previous_page)
+
       previous_real = @real_page.previous_page
       previous_real && TypedPage.new(previous_real, @item_class)
     end
