@@ -4,8 +4,8 @@
 //
 // v2 design (superseding the earlier pure-.rbs-only v1, after real
 // editor testing showed Steep gives no autocomplete for `hash["key"]`-
-// style bracket access, only error-checking on typos - confirmed with
-// Jon against a real generated interface in Sublime+Steep):
+// style bracket access, only error-checking on typos - confirmed
+// against a real generated interface in Sublime+Steep):
 //
 //  1. Still backed by the real dynamic client - every generated method
 //     is a thin wrapper that calls straight through to the real
