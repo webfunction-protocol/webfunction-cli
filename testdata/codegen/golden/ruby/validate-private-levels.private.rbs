@@ -14,7 +14,9 @@ module WebFunctionClient
   Undefined: untyped
 
   class Client
-    def initialize: (untyped real_client) -> void
+    SOURCE_URL: String
+
+    def initialize: (?untyped real_client, ?bearer_auth: String?, ?version: String?, ?pipelined: bool) -> void
     def self.from_package_endpoint: (String url, ?bearer_auth: String?, ?version: String?, ?pipelined: bool) -> Client
 
     def internal_sync: () -> bool

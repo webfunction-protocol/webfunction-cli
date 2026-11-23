@@ -90,14 +90,17 @@ type aliasResolver func(refName string) string
 // Attribute's "values" or Argument's "choices"; nil if none). Mirrors
 // jsgen's jsdocType closely, PHPDoc syntax instead of JSDoc's.
 //
-// When choices is non-empty, it takes over the type entirely: the result
-// is a PHPDoc literal union (e.g. 'active'|'inactive'|'pending') rather
-// than the bare base type, since the literal union is what actually lets
-// PHPStan/Psalm catch a typo or an out-of-set value, not just document it.
+// When choices is non-empty and the type has no array alternative, it
+// takes over the type entirely: the result is a PHPDoc literal union
+// (e.g. 'active'|'inactive'|'pending') rather than the bare base type, since
+// the literal union is what actually lets PHPStan/Psalm catch a typo or
+// an out-of-set value, not just document it. When the type is or includes
+// an array, the spec makes the choices the allowed ITEMS of that array,
+// so see choiceParts.
 func phpDocType(t webfunction.Type, local localShapes, forceNullable bool, resolve aliasResolver, choices []interface{}) string {
 	var parts []string
 	if lits := literalUnion(choices); len(lits) > 0 {
-		parts = lits
+		parts = choiceParts(t, lits)
 	} else {
 		parts = make([]string, 0, len(t.Union))
 		for _, alt := range t.Union {
@@ -157,6 +160,34 @@ func phpDocAlt(alt webfunction.TypeAlt, local localShapes, resolve aliasResolver
 	default:
 		return "mixed"
 	}
+}
+
+// choiceParts renders the alternatives of a type that carries a closed set
+// of legal values, lits being the literals from literalUnion. Per the spec,
+// when the type is (or includes) the array type, the values are the allowed
+// items of the array, so an array alternative becomes list<literals>. A
+// union may mix an array with a scalar (e.g. ["string", "array"]), and the
+// spec does not say which the values belong to, so each scalar alternative
+// keeps the literals as well. An object alternative has no literals to
+// offer and is left out, as it always has been when choices are present;
+// null is added by the caller. With no array alternative the literals
+// stand for the whole type. Mirrors jsgen's choiceParts.
+func choiceParts(t webfunction.Type, lits []string) []string {
+	if !t.HasBase("array") {
+		return lits
+	}
+	items := "list<" + strings.Join(dedupe(lits), "|") + ">"
+	parts := make([]string, 0, len(t.Union)+len(lits))
+	for _, alt := range t.Union {
+		switch alt.Base {
+		case "array":
+			parts = append(parts, items)
+		case "object", "null":
+		default:
+			parts = append(parts, lits...)
+		}
+	}
+	return parts
 }
 
 // literalUnion renders a closed set of legal values (an Attribute's

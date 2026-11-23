@@ -31,7 +31,7 @@ var validTargets = []string{"java", "go", "php", "js", "csharp", "ruby", "python
 var privateTargets = []string{"js", "php", "python", "java", "csharp", "go", "ruby"}
 
 // defaultNamespace is --namespace's default, used by any target that
-// needs one (php, go, java, csharp).
+// needs one (php, go, java, csharp, ruby).
 const defaultNamespace = "WebFunctionClient"
 
 // CodegenCommand implements "wfn codegen ...".
@@ -62,6 +62,8 @@ Flags (optional):
                already provides namespacing, so there's nothing to set.
   --private    Include endpoints, arguments, and attributes flagged private
                in the generated code (default: excluded). Currently for: js, php, python, java, csharp, go, ruby
+  --hashfile   Also write a hash of the package content to this file (see "wfn help hash").
+               It is the hash of the very package the code was generated from.
 
 Note: --target ruby writes TWO files - the -o path (a .rb source file with
 a real generated wrapper class) plus a companion .rbs signature file at
@@ -82,6 +84,7 @@ func (c *CodegenCommand) Run(args []string) error {
 	output := fs.String("o", "", "output file name")
 	namespace := fs.String("namespace", defaultNamespace, "namespace/module for the generated class (currently for: php, go, java, csharp, ruby)")
 	private := fs.Bool("private", false, "include endpoints, arguments, and attributes flagged private (currently for: js, php, python, java, csharp, go, ruby)")
+	hashfile := fs.String("hashfile", "", "write a hash of the package content to this file")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -181,7 +184,7 @@ func (c *CodegenCommand) Run(args []string) error {
 		}
 		fmt.Printf("Wrote %s\n", rbsPath)
 	}
-	return nil
+	return loaded.writeHashFile(*hashfile)
 }
 
 func isValidTarget(target string) bool {

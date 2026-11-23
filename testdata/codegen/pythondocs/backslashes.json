@@ -1,0 +1,24 @@
+{
+  "base_url": "https://api.example.com",
+  "name": "Backslash Docs Probe",
+  "objects": [
+    {
+      "name": "payment",
+      "attributes": [
+        { "name": "id", "type": "string", "docs": "Id like \\d{4} and a tab \\t marker." },
+        { "name": "note", "type": "string", "docs": "Backslash then triple quotes: \\\"\"\" end." }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "refund-payment",
+      "returns": "object.payment",
+      "docs": "Saves to C:\\new\\table and matches \\d+ or \\s.\nA line ending in a backslash\\\nNext line.",
+      "arguments": [ { "name": "id", "type": "string", "flags": ["required"] } ],
+      "errors": [
+        { "code": "BAD_PATH", "docs": "Bad path C:\\temp\nand \\x41 more." }
+      ]
+    }
+  ]
+}

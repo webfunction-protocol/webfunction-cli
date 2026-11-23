@@ -55,7 +55,7 @@ final class Client
     }
 
     /**
-     * @param array{tags?: 'red'|'green'|'blue', bad-tags?: 'red'|42} $args
+     * @param array{tags?: list<'red'|'green'|'blue'>, bad-tags?: list<'red'|42>} $args
      * @return bool
      * @throws UnexpectedStatusCodeError Non-200, non-400 response.
      * @throws JsonParseError Response body wasn't valid JSON.

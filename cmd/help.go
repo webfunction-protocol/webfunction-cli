@@ -56,6 +56,7 @@ Usage:
   wfn <command> [arguments]
   wfn help              Show this help
   wfn help <command>     Show detailed help for a command
+  wfn --version         Show the version
 
 Available commands:`)
 

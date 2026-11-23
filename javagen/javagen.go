@@ -29,7 +29,11 @@
 //     own enum constant (Jackson maps JSON null straight to a null
 //     field without invoking the creator) - it instead marks the field
 //     nullable regardless of what the endpoint's own required/nullable
-//     flag says.
+//     flag says. When the type is an array, the choices are its allowed
+//     items (per the spec): the field is a List of the enum, the wire
+//     type follows the items (types.go's itemWireType), and items of
+//     mixed kinds, or an array mixed with a scalar, get no enum and keep
+//     the type they would have without choices.
 //  4. Optional Arguments and nullable Attributes both make a field
 //     nullable, annotated with JSR-305's javax.annotation.Nullable
 //     (chosen as the most common annotation source in the ecosystem,
@@ -314,7 +318,10 @@ func writeHeader(b *strings.Builder, pkg *webfunction.Package, sourceURL, packag
 	b.WriteString("//\n")
 	b.WriteString("// IMPORTANT - this file MUST be saved as exactly \"Client.java\": javac\n")
 	b.WriteString("// requires a compilation unit's public top-level type to match its\n")
-	b.WriteString("// filename.\n\n")
+	b.WriteString("// filename. It also belongs in a directory matching its package, which\n")
+	b.WriteString("// build tools and IDEs expect:\n")
+	b.WriteString("//   <source root>/" + strings.ReplaceAll(packageName, ".", "/") + "/Client.java\n")
+	b.WriteString("// (<source root> is src/main/java in a Maven or Gradle project.)\n\n")
 	b.WriteString("package " + packageName + ";\n\n")
 	b.WriteString("import com.fasterxml.jackson.core.type.TypeReference;\n")
 	b.WriteString("import com.fasterxml.jackson.databind.DeserializationFeature;\n")
@@ -353,7 +360,7 @@ func writeClientCore(b *strings.Builder, pkg *webfunction.Package, sourceURL str
 	b.WriteString("    private Client(org.webfunction.Client raw) {\n        this.raw = raw;\n    }\n\n")
 
 	writeJavadoc(b, "    ", []string{"Builds a Client, fetching the package definition from its source URL."})
-	b.WriteString("    public static Client newClient(org.webfunction.Options opts) {\n")
+	b.WriteString("    public static Client createNew(org.webfunction.Options opts) {\n")
 	b.WriteString("        return new Client(org.webfunction.Client.fromPackageEndpoint(SOURCE_URL, opts));\n")
 	b.WriteString("    }\n\n")
 

@@ -58,45 +58,11 @@ public sealed class Client
     }
 
     /// <summary>
-    /// SetTagsArgsBadTagsChoice is the closed set of legal values for "bad-tags".
-    /// </summary>
-    [System.Text.Json.Serialization.JsonConverter(typeof(SetTagsArgsBadTagsChoiceConverter))]
-    public enum SetTagsArgsBadTagsChoice
-    {
-        Red,
-        Value42,
-    }
-
-    private sealed class SetTagsArgsBadTagsChoiceConverter : System.Text.Json.Serialization.JsonConverter<SetTagsArgsBadTagsChoice>
-    {
-        public override SetTagsArgsBadTagsChoice Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
-        {
-            var wire = reader.GetString();
-            return wire switch
-            {
-                "red" => SetTagsArgsBadTagsChoice.Red,
-                42L => SetTagsArgsBadTagsChoice.Value42,
-                _ => throw new System.Text.Json.JsonException($"unknown value for SetTagsArgsBadTagsChoice: {wire}"),
-            };
-        }
-
-        public override void Write(System.Text.Json.Utf8JsonWriter writer, SetTagsArgsBadTagsChoice value, System.Text.Json.JsonSerializerOptions options)
-        {
-            switch (value)
-            {
-                case SetTagsArgsBadTagsChoice.Red: writer.WriteStringValue("red"); break;
-                case SetTagsArgsBadTagsChoice.Value42: writer.WriteStringValue(42L); break;
-                default: throw new System.Text.Json.JsonException($"unknown SetTagsArgsBadTagsChoice member: {value}");
-            }
-        }
-    }
-
-    /// <summary>
     /// SetTagsArgs holds the arguments for the set-tags endpoint.
     /// </summary>
     public sealed record SetTagsArgs(
-        [property: System.Text.Json.Serialization.JsonPropertyName("tags")] SetTagsArgsTagsChoice? Tags = null,
-        [property: System.Text.Json.Serialization.JsonPropertyName("bad-tags")] SetTagsArgsBadTagsChoice? BadTags = null
+        [property: System.Text.Json.Serialization.JsonPropertyName("tags")] List<SetTagsArgsTagsChoice>? Tags = null,
+        [property: System.Text.Json.Serialization.JsonPropertyName("bad-tags")] List<string>? BadTags = null
     );
 
     private const string SourceUrl = "https://example.test/package";
@@ -116,7 +82,7 @@ public sealed class Client
     /// <summary>
     /// Builds a Client, fetching the package definition from its source URL.
     /// </summary>
-    public static async Task<Client> NewClientAsync(string? bearerAuth = null, string? version = null)
+    public static async Task<Client> CreateNew(string? bearerAuth = null, string? version = null)
     {
         var raw = await global::WebFunction.Client.FromPackageEndpointAsync(SourceUrl, bearerAuth: bearerAuth, version: version).ConfigureAwait(false);
         return new Client(raw);

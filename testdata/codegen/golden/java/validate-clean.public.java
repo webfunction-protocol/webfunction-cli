@@ -10,7 +10,10 @@
 //
 // IMPORTANT - this file MUST be saved as exactly "Client.java": javac
 // requires a compilation unit's public top-level type to match its
-// filename.
+// filename. It also belongs in a directory matching its package, which
+// build tools and IDEs expect:
+//   <source root>/webfunctionclient/Client.java
+// (<source root> is src/main/java in a Maven or Gradle project.)
 
 package webfunctionclient;
 
@@ -144,7 +147,7 @@ public final class Client {
     /**
      * Builds a Client, fetching the package definition from its source URL.
      */
-    public static Client newClient(org.webfunction.Options opts) {
+    public static Client createNew(org.webfunction.Options opts) {
         return new Client(org.webfunction.Client.fromPackageEndpoint(SOURCE_URL, opts));
     }
 

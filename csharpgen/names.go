@@ -189,7 +189,9 @@ func uniqueMethodName(used map[string]bool, name string) string {
 // own default value ("WebFunctionClient", already PascalCase). Each
 // dot-separated segment is sanitized independently: non-letter/digit
 // characters dropped, PascalCased, and escaped via identifier() if it
-// would start with a digit or collide with a keyword. Falls back to
+// would start with a digit or collide with a keyword. A segment that is a
+// single word written entirely in capitals (an acronym such as "SDK") is
+// kept as written rather than re-cased to "Sdk". Falls back to
 // "WebFunctionClient" for an empty or fully-invalid namespace.
 func csharpNamespace(namespace string) string {
 	rawSegments := strings.Split(namespace, ".")
@@ -211,6 +213,9 @@ func csharpNamespace(namespace string) string {
 			}
 		}
 		s := pascalCase(b.String())
+		if isAllCapsWord(b.String()) {
+			s = b.String()
+		}
 		if s == "" {
 			continue
 		}
@@ -220,4 +225,16 @@ func csharpNamespace(namespace string) string {
 		return "WebFunctionClient"
 	}
 	return strings.Join(segments, ".")
+}
+
+// isAllCapsWord reports whether s is a single word written entirely in
+// capital letters, such as "SDK" or "API2": no lower-case letters and no
+// separators ('-', '_', ' ').
+func isAllCapsWord(s string) bool {
+	for _, r := range s {
+		if !unicode.IsUpper(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }

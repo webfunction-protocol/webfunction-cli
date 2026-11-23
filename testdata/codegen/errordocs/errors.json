@@ -1,0 +1,21 @@
+{
+  "base_url": "https://api.example.com",
+  "name": "Error Docs Probe",
+  "objects": [
+    { "name": "payment", "attributes": [ { "name": "id", "type": "string" } ] }
+  ],
+  "endpoints": [
+    {
+      "name": "refund-payment",
+      "returns": "object.payment",
+      "docs": "Refunds a payment.",
+      "arguments": [ { "name": "id", "type": "string", "flags": ["required"] } ],
+      "errors": [
+        { "code": "NOT_FOUND", "docs": "This error occurs when no payment with the provided ID exists in your\naccount, or the payment belongs to a different merchant." },
+        { "code": "TWO_PARAS", "docs": "First paragraph line one\nfirst paragraph line two.\n\nSecond paragraph, should it appear?" },
+        { "code": "SPECIAL", "docs": "Contains a */ closer, a <tag> & amp,\na `backtick`, \"quotes\", a \"\"\" triple,\nand a #{ruby} interp." },
+        { "code": "SINGLE", "docs": "One line only." }
+      ]
+    }
+  ]
+}

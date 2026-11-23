@@ -89,7 +89,7 @@ public sealed class Client
     /// <summary>
     /// Builds a Client, fetching the package definition from its source URL.
     /// </summary>
-    public static async Task<Client> NewClientAsync(string? bearerAuth = null, string? version = null)
+    public static async Task<Client> CreateNew(string? bearerAuth = null, string? version = null)
     {
         var raw = await global::WebFunction.Client.FromPackageEndpointAsync(SourceUrl, bearerAuth: bearerAuth, version: version).ConfigureAwait(false);
         return new Client(raw);

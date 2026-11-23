@@ -108,9 +108,9 @@ func goAltType(alt webfunction.TypeAlt, local localStructs, resolve structResolv
 		}
 	case "array":
 		if alt.Of != nil {
-			// Array item types have no choices concept of their own -
-			// choices/values apply to the field as a whole, not to
-			// each array element individually.
+			// An item type never carries choices of its own: when a
+			// field has choices/values, narrowArrayItems has already
+			// filled in the items of an unspecified array from them.
 			return "[]" + goType(*alt.Of, localStructs{}, false, resolve)
 		}
 		if local.arrayOfItem != "" {
@@ -130,6 +130,62 @@ func goAltType(alt webfunction.TypeAlt, local localStructs, resolve structResolv
 	}
 }
 
+// narrowArrayItems fills in the item type of an array whose items the
+// type leaves unspecified (a bare "array", or the equivalent [["any"]])
+// from the field's choices/values. Per the spec those are the allowed
+// items, so when every one is a string, a number or a boolean the items
+// are known to be that type. Mixed items, an explicit null and an item
+// type the package spells out are left alone, as is every non-array
+// alternative. t itself is never modified.
+func narrowArrayItems(t webfunction.Type, choices []interface{}) webfunction.Type {
+	base := choiceItemBase(choices)
+	if base == "" {
+		return t
+	}
+	narrowed := webfunction.Type{Union: make([]webfunction.TypeAlt, len(t.Union))}
+	copy(narrowed.Union, t.Union)
+	for i := range narrowed.Union {
+		if alt := narrowed.Union[i]; alt.Base == "array" && itemsUnspecified(alt) {
+			narrowed.Union[i].Of = &webfunction.Type{Union: []webfunction.TypeAlt{{Base: base}}}
+		}
+	}
+	return narrowed
+}
+
+// itemsUnspecified reports whether an array alternative says nothing
+// about its items: a bare "array" (no Of), or an explicit array of any.
+func itemsUnspecified(alt webfunction.TypeAlt) bool {
+	if alt.Of == nil {
+		return true
+	}
+	return len(alt.Of.Union) == 1 && alt.Of.Union[0].Base == "any"
+}
+
+// choiceItemBase returns the JSON base type ("string", "number" or
+// "boolean") that every entry of choices has, or "" if there are none or
+// they differ (an explicit null counts as different).
+func choiceItemBase(choices []interface{}) string {
+	base := ""
+	for _, c := range choices {
+		var b string
+		switch c.(type) {
+		case string:
+			b = "string"
+		case float64: // encoding/json decodes all JSON numbers as float64
+			b = "number"
+		case bool:
+			b = "boolean"
+		default:
+			return ""
+		}
+		if base != "" && b != base {
+			return ""
+		}
+		base = b
+	}
+	return base
+}
+
 // choicesNote renders a closed set of legal values (an Attribute's
 // "values" or an Argument's "choices", per spec) as a short doc-comment
 // note, e.g. `one of: "active", "inactive", "pending"`.
@@ -139,7 +195,8 @@ func goAltType(alt webfunction.TypeAlt, local localStructs, resolve structResolv
 // "inactive" as a real type), Go has no literal-union type mechanism at
 // all - a doc note is the most this target can do without generating a
 // distinct named type plus constants (a real, more involved enhancement
-// - not attempted here; the field keeps its plain base type). Returns ""
+// - not attempted here; the field keeps its plain base type, apart from
+// the array item inference in narrowArrayItems). Returns ""
 // if choices is empty.
 func choicesNote(choices []interface{}) string {
 	if len(choices) == 0 {

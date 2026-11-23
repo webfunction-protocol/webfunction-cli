@@ -135,12 +135,13 @@ func csharpAltType(alt webfunction.TypeAlt, local localTypes, resolve typeResolv
 }
 
 // choiceWireType picks which C# type a generated enum's wire value should
-// use, based on the field's own declared type - not by inspecting the
-// choices/values list itself. Tying it to the field's type (rather than
-// sniffing the values) keeps a choices-enum's wire representation
-// consistent with what the field's type would have been without choices
-// at all. Mirrors javagen's choiceWireType exactly.
-func choiceWireType(t webfunction.Type) string {
+// use for a scalar field, based on the field's own declared type rather
+// than by sniffing the choices/values list, keeping a choices-enum's wire
+// representation consistent with what the field's type would have been
+// without choices at all. The one thing it does look at is whether a
+// number's choices include a fraction, see numberWireType. Array fields
+// use itemWireType instead. Mirrors javagen's choiceWireType.
+func choiceWireType(t webfunction.Type, choices []interface{}) string {
 	for _, alt := range t.Union {
 		switch alt.Base {
 		case "string":
@@ -148,13 +149,87 @@ func choiceWireType(t webfunction.Type) string {
 		case "boolean":
 			return "bool"
 		case "number":
-			if alt.Refinement == "f32" || alt.Refinement == "f64" {
-				return "double"
-			}
-			return "long"
+			return numberWireType(alt.Refinement, choices)
 		}
 	}
 	return "string"
+}
+
+// numberWireType picks double for a number with an f32/f64 refinement or
+// with any non-integer choice (a long wire value would truncate 2.5 to
+// 2L), and long otherwise.
+func numberWireType(refinement string, choices []interface{}) string {
+	if refinement == "f32" || refinement == "f64" {
+		return "double"
+	}
+	for _, c := range choices {
+		if v, ok := c.(float64); ok && v != float64(int64(v)) {
+			return "double"
+		}
+	}
+	return "long"
+}
+
+// isSingleArray reports whether t is an array and nothing else (a null
+// alternative aside). An array mixed with a scalar is a multi-type union,
+// which is object in C#, and a closed set of values cannot be an enum
+// that stands for both.
+func isSingleArray(t webfunction.Type) bool {
+	n, array := 0, false
+	for _, alt := range t.Union {
+		if alt.Base == "null" {
+			continue
+		}
+		n++
+		if alt.Base == "array" {
+			array = true
+		}
+	}
+	return n == 1 && array
+}
+
+// itemWireType picks the wire type of the enum for the items of an array
+// field from its choices/values: string, bool, long or double (see
+// numberWireType; an f32/f64 refinement on the declared item type
+// counts). A null among the items is skipped, as in an enum. It returns
+// "" when there is nothing to build an enum from: no non-null choices, or
+// items of mixed kinds, which a C# enum cannot represent. Mirrors
+// javagen's itemWireType.
+func itemWireType(t webfunction.Type, choices []interface{}) string {
+	kind := ""
+	for _, c := range choices {
+		var k string
+		switch c.(type) {
+		case nil:
+			continue
+		case string:
+			k = "string"
+		case bool:
+			k = "bool"
+		case float64:
+			k = "number"
+		default:
+			return ""
+		}
+		if kind != "" && k != kind {
+			return ""
+		}
+		kind = k
+	}
+	if kind != "number" {
+		return kind
+	}
+	refinement := ""
+	for _, alt := range t.Union {
+		if alt.Base == "array" && alt.Of != nil {
+			for _, item := range alt.Of.Union {
+				if item.Base == "number" {
+					refinement = item.Refinement
+				}
+			}
+		}
+	}
+	return numberWireType(refinement, choices)
 }
 
 // choiceConstantLabel derives a PascalCase C# enum member name from one

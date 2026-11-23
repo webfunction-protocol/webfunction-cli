@@ -328,8 +328,15 @@ func (s *recordSet) renderFields(ownerName string, fields []field, resolve typeR
 
 		nullable := f.optional
 		var typ string
-		if len(f.choices) > 0 {
-			enumName, hasNull := s.buildEnumField(ownerName, f)
+		switch {
+		case len(f.choices) == 0:
+			typ = csharpType(f.jsonType, localTypes{}, f.optional, resolve)
+		case f.jsonType.HasBase("array"):
+			// Per the spec the choices of an array are its allowed items,
+			// so the enum is the item type and the field a List of it.
+			typ = s.arrayChoicesType(ownerName, f, resolve)
+		default:
+			enumName, hasNull := s.buildEnumField(ownerName, f, choiceWireType(f.jsonType, f.choices))
 			typ = enumName
 			if hasNull {
 				nullable = true
@@ -337,8 +344,6 @@ func (s *recordSet) renderFields(ownerName string, fields []field, resolve typeR
 			if nullable {
 				typ += "?"
 			}
-		} else {
-			typ = csharpType(f.jsonType, localTypes{}, f.optional, resolve)
 		}
 
 		doc := f.docs
@@ -381,8 +386,41 @@ func orderRequiredFirst(fields []recordField) []recordField {
 	return out
 }
 
+// arrayChoicesType renders an array field that has choices/values. When
+// the field is a plain array whose choices are all strings, all numbers or
+// all booleans, the choices are the allowed items: the result is a List of
+// a generated enum (an explicit null among them makes the items nullable,
+// List<Enum?>, but not the field itself). Otherwise there is no
+// enum to build - items of mixed kinds, or an array mixed with a scalar -
+// and the field keeps the type it would have without choices. Mirrors
+// javagen's arrayChoicesType.
+func (s *recordSet) arrayChoicesType(ownerName string, f field, resolve typeResolver) string {
+	wireType := ""
+	if isSingleArray(f.jsonType) {
+		wireType = itemWireType(f.jsonType, f.choices)
+	}
+	if wireType == "" {
+		return csharpType(f.jsonType, localTypes{}, f.optional, resolve)
+	}
+	enumName, hasNull := s.buildEnumField(ownerName, f, wireType)
+	item := enumName
+	if hasNull {
+		// A JSON null cannot be read into a non-nullable enum (the
+		// converter would be handed the null token and reject it), so the
+		// items are nullable: System.Text.Json maps a null element straight
+		// through without calling the converter.
+		item += "?"
+	}
+	typ := "List<" + item + ">"
+	if f.optional {
+		typ += "?"
+	}
+	return typ
+}
+
 // buildEnumField generates a real C# enum type (plus its paired
-// JsonConverter) for a field's choices/values and registers both in
+// JsonConverter) with the given wire type for a field's choices/values
+// and registers both in
 // s.ordered. Returns the enum's name and whether an explicit null was
 // among the choices - a null entry means the wire value itself may
 // legally be absent/null, on top of whatever the endpoint's own
@@ -392,8 +430,7 @@ func orderRequiredFirst(fields []recordField) []recordField {
 // so no constant is generated for it - only the field's own nullability
 // needs adjusting). Mirrors javagen's buildEnumField exactly, adapted to
 // C#'s [JsonConverter]-on-the-enum mechanism.
-func (s *recordSet) buildEnumField(ownerName string, f field) (name string, hasNull bool) {
-	wireType := choiceWireType(f.jsonType)
+func (s *recordSet) buildEnumField(ownerName string, f field, wireType string) (name string, hasNull bool) {
 	enumName := s.uniqueName(ownerName + exportedTypeName(f.name) + "Choice")
 	converterName := enumName + "Converter"
 

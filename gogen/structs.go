@@ -173,7 +173,7 @@ func (s *structSet) renderFields(fields []field, resolve structResolver) []rende
 		}
 		used[goName] = true
 
-		typ := goType(f.jsonType, localStructs{}, f.optional, resolve)
+		typ := goType(narrowArrayItems(f.jsonType, f.choices), localStructs{}, f.optional, resolve)
 
 		tag := f.name
 		if f.optional {

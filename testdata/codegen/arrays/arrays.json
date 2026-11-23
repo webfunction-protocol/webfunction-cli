@@ -1,0 +1,34 @@
+{
+  "base_url": "https://api.example.com",
+  "name": "Arrays",
+  "objects": [
+    {
+      "name": "thing",
+      "attributes": [
+        { "name": "a_bare_values", "type": "array", "values": ["x", "y"] },
+        { "name": "b_nested_values", "type": [["string"]], "values": ["x", "y"] },
+        { "name": "c_canon_values", "type": { "array": "string" }, "values": ["x", "y"] },
+        { "name": "d_nested_novalues", "type": [["string"]] },
+        { "name": "e_bare_novalues", "type": "array" },
+        { "name": "f_num_values", "type": [["number"]], "values": [1, 2] },
+        { "name": "g_union_items_values", "type": [["string", "number"]], "values": ["a", 1] },
+        { "name": "h_nullable_values", "type": "array", "values": ["x", "y"], "flags": ["nullable"] },
+        { "name": "i_mixed_values", "type": ["string", "array"], "values": ["x", "y"] },
+        { "name": "j_scalar_values", "type": "string", "values": ["x", "y"] }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "get-thing",
+      "returns": "object.thing",
+      "arguments": [
+        { "name": "a_bare_choices", "type": "array", "choices": ["x", "y"] },
+        { "name": "b_nested_choices", "type": [["string"]], "choices": ["x", "y"] },
+        { "name": "c_nested_nochoices", "type": [["string"]] },
+        { "name": "d_scalar_choices", "type": "string", "choices": ["x", "y"] },
+        { "name": "e_mixed_choices", "type": ["string", "array"], "choices": ["x", "y"] }
+      ]
+    }
+  ]
+}

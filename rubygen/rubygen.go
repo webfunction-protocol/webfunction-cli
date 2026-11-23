@@ -52,6 +52,7 @@ package rubygen
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/webfunction-protocol/webfunction-go"
@@ -64,7 +65,11 @@ import (
 // companion RBS signature file for pkg. moduleName namespaces the
 // generated classes (mirroring every other target's --namespace flag,
 // reintroduced now that v2 actually has a generated class to namespace
-// - v1 had none). Returns (rubySource, rbsSource, error).
+// - v1 had none). moduleName is a Ruby constant path such as Acme::Billing:
+// every "::"-separated segment must be a constant name, and the classes are
+// generated inside one nested module per segment (the compact form,
+// module Acme::Billing, would raise NameError unless Acme already existed).
+// Anything else is an error. Returns (rubySource, rbsSource, error).
 //
 // Generic objects are expanded first (generics.Expand): every application
 // becomes an ordinary generated object such as ListOfUser, and the generic
@@ -76,6 +81,10 @@ func Generate(pkg *webfunction.Package, sourceURL, moduleName string, includePri
 	pkg = generics.Expand(pkg)
 	if moduleName == "" {
 		moduleName = "WebFunctionClient"
+	}
+	segments, err := moduleSegments(moduleName)
+	if err != nil {
+		return "", "", err
 	}
 	if !includePrivate {
 		pkg = privatefilter.Apply(pkg)
@@ -104,28 +113,74 @@ func Generate(pkg *webfunction.Package, sourceURL, moduleName string, includePri
 	rb.WriteString(header)
 	rb.WriteString("# frozen_string_literal: true\n\n")
 	rb.WriteString("require \"web_function\"\n\n")
-	rb.WriteString(fmt.Sprintf("module %s\n", moduleName))
 
 	rbs.WriteString(header)
-	rbs.WriteString(fmt.Sprintf("module %s\n", moduleName))
+
+	// The bodies are written for a single module and nested afterwards.
+	var rbBody, rbsBody strings.Builder
 
 	if needsPage {
-		writeTypedPageClass(&rb)
-		writeTypedPageSig(&rbs)
+		writeTypedPageClass(&rbBody)
+		writeTypedPageSig(&rbsBody)
 	}
 
 	for _, cls := range classes.ordered {
-		writeRubyClass(&rb, cls)
-		writeRbsClass(&rbs, cls)
+		writeRubyClass(&rbBody, cls)
+		writeRbsClass(&rbsBody, cls)
 	}
 
-	writeClientClass(&rb, moduleName, infos)
-	writeClientSig(&rbs, infos)
+	writeClientClass(&rbBody, moduleName, sourceURL, infos)
+	writeClientSig(&rbsBody, infos)
 
-	rb.WriteString("end\n")
-	rbs.WriteString("end\n")
+	rb.WriteString(nestModules(segments, rbBody.String()))
+	rbs.WriteString(nestModules(segments, rbsBody.String()))
 
 	return rb.String(), rbs.String(), nil
+}
+
+// constantName is what a module name segment must match: a Ruby constant,
+// ASCII only.
+var constantName = regexp.MustCompile(`^[A-Z][A-Za-z0-9_]*$`)
+
+// moduleSegments splits moduleName on "::" and checks that every segment
+// can name a module. BEGIN and END look like constants but are keywords.
+func moduleSegments(moduleName string) ([]string, error) {
+	segments := strings.Split(moduleName, "::")
+	for _, seg := range segments {
+		if !constantName.MatchString(seg) || seg == "BEGIN" || seg == "END" {
+			return nil, fmt.Errorf("invalid namespace segment %q in %q: each module name must be a Ruby constant matching %s and not a keyword (separate nested modules with \"::\")", seg, moduleName, constantName)
+		}
+	}
+	return segments, nil
+}
+
+// nestModules wraps body, which is written for a single module, in one
+// module per segment, indenting it one level per module beyond the first.
+func nestModules(segments []string, body string) string {
+	var b strings.Builder
+	for i, seg := range segments {
+		b.WriteString(strings.Repeat("  ", i) + "module " + seg + "\n")
+	}
+	b.WriteString(indentLines(body, 2*(len(segments)-1)))
+	for i := len(segments) - 1; i >= 0; i-- {
+		b.WriteString(strings.Repeat("  ", i) + "end\n")
+	}
+	return b.String()
+}
+
+// indentLines indents every non-empty line of s by n spaces.
+func indentLines(s string, n int) string {
+	if n == 0 {
+		return s
+	}
+	pad := strings.Repeat(" ", n)
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if l != "" {
+			lines[i] = pad + l
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func packageDisplayName(pkg *webfunction.Package) string {
@@ -355,7 +410,7 @@ func buildEndpointGen(classes *classSet, ep webfunction.Endpoint, methodName str
 	return gen
 }
 
-func writeClientClass(b *strings.Builder, moduleName string, infos []endpointGen) {
+func writeClientClass(b *strings.Builder, moduleName, sourceURL string, infos []endpointGen) {
 	b.WriteString("  # Sentinel distinguishing \"caller omitted this optional argument\" from\n")
 	b.WriteString("  # \"caller explicitly passed nil\" - forwarding nil either way would send\n")
 	b.WriteString("  # the real client (and the real server) an explicit JSON null for an\n")
@@ -363,7 +418,20 @@ func writeClientClass(b *strings.Builder, moduleName string, infos []endpointGen
 	b.WriteString("  Undefined = ::Object.new.freeze\n\n")
 
 	b.WriteString("  class Client\n")
-	b.WriteString("    def initialize(real_client)\n      @real_client = real_client\n    end\n\n")
+	b.WriteString("    # The package endpoint this client was generated from.\n")
+	b.WriteString("    SOURCE_URL = " + rubyStringLiteral(sourceURL) + "\n\n")
+	b.WriteString("    # Pass a real ::WebFunction::Client to wrap it (handy in tests), or pass nothing\n")
+	b.WriteString("    # to connect to SOURCE_URL, the endpoint this file was generated from.\n")
+	b.WriteString("    def initialize(real_client = nil, bearer_auth: nil, version: nil, pipelined: false)\n")
+	b.WriteString("      if real_client\n")
+	b.WriteString("        if bearer_auth || version || pipelined\n")
+	b.WriteString("          raise ::ArgumentError, \"bearer_auth, version and pipelined apply only when no real_client is given\"\n")
+	b.WriteString("        end\n\n")
+	b.WriteString("        @real_client = real_client\n")
+	b.WriteString("      else\n")
+	b.WriteString("        @real_client = ::WebFunction::Client.from_package_endpoint(SOURCE_URL, bearer_auth: bearer_auth, version: version, pipelined: pipelined)\n")
+	b.WriteString("      end\n")
+	b.WriteString("    end\n\n")
 	b.WriteString("    # @param url [String]\n")
 	b.WriteString("    def self.from_package_endpoint(url, bearer_auth: nil, version: nil, pipelined: false)\n")
 	b.WriteString("      new(::WebFunction::Client.from_package_endpoint(url, bearer_auth: bearer_auth, version: version, pipelined: pipelined))\n")
@@ -393,7 +461,7 @@ func writeClientMethod(b *strings.Builder, info endpointGen) {
 		}
 		line := "    # May raise WebFunction::BadRequestError with code " + code
 		if dl := docLines(e.Docs); len(dl) > 0 {
-			line += " - " + dl[0]
+			line += " - " + joinDocLines(dl)
 		}
 		b.WriteString(line + "\n")
 	}
@@ -473,7 +541,8 @@ func visibleEndpoints(pkg *webfunction.Package, includePrivate bool) []webfuncti
 func writeClientSig(b *strings.Builder, infos []endpointGen) {
 	b.WriteString("  Undefined: untyped\n\n")
 	b.WriteString("  class Client\n")
-	b.WriteString("    def initialize: (untyped real_client) -> void\n")
+	b.WriteString("    SOURCE_URL: String\n\n")
+	b.WriteString("    def initialize: (?untyped real_client, ?bearer_auth: String?, ?version: String?, ?pipelined: bool) -> void\n")
 	b.WriteString("    def self.from_package_endpoint: (String url, ?bearer_auth: String?, ?version: String?, ?pipelined: bool) -> Client\n\n")
 
 	for _, info := range infos {

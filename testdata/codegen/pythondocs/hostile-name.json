@@ -1,0 +1,15 @@
+{
+  "base_url": "https://api.example.com",
+  "name": "Pay \"\"\" \\d\nimport os #",
+  "objects": [
+    { "name": "payment", "attributes": [ { "name": "id", "type": "string" } ] }
+  ],
+  "endpoints": [
+    {
+      "name": "find-payment",
+      "returns": "object.payment",
+      "docs": "Finds a payment.",
+      "arguments": [ { "name": "id", "type": "string", "flags": ["required"] } ]
+    }
+  ]
+}

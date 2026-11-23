@@ -23,9 +23,13 @@
 //  4. Enum/choices (an Argument's "choices" or Attribute's "values") are
 //     documented in a doc comment, not encoded as an enforced type - Go
 //     has no literal-union type mechanism the way TypeScript/PHPStan
-//     do. A field keeps its plain base type. (A stronger version - a
-//     generated named type plus declared constants - is a real possible
-//     enhancement, not attempted here.)
+//     do. A field keeps its plain base type, with one exception: an
+//     array whose items the type leaves unspecified (a bare "array")
+//     takes its item type from the choices when they are all strings,
+//     all numbers or all booleans, since the spec makes them the
+//     allowed items (see types.go's narrowArrayItems). (A stronger
+//     version - a generated named type plus declared constants - is a
+//     real possible enhancement, not attempted here.)
 //  5. A type union with more than one non-null alternative (e.g.
 //     string|number) collapses to `any` - Go can't express real type
 //     unions the way PHP or TypeScript can. This is a genuine

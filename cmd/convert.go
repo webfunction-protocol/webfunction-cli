@@ -38,6 +38,7 @@ Flags:
   --file       Path to a local webfunction package JSON file to convert instead of --url
   -o           Output file to write the converted document to (required)
   --private    Include endpoints, arguments, and attributes flagged private (default: excluded)
+  --hashfile   Also write a hash of the package content to this file (see "wfn help hash")
 
 Example:
   wfn convert --target openapi --url https://api.reservepay.com/merchants -o converted.json
@@ -53,6 +54,7 @@ func (c *ConvertCommand) Run(args []string) error {
 	file := fs.String("file", "", "path to a webfunction package JSON file (instead of --url)")
 	output := fs.String("o", "", "output file name")
 	private := fs.Bool("private", false, "include endpoints, arguments, and attributes flagged private in the output")
+	hashfile := fs.String("hashfile", "", "write a hash of the package content to this file")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -120,7 +122,7 @@ func (c *ConvertCommand) Run(args []string) error {
 		return fmt.Errorf("writing %s: %w", *output, err)
 	}
 	fmt.Printf("Wrote %s\n", *output)
-	return nil
+	return loaded.writeHashFile(*hashfile)
 }
 
 func isValidConvertTarget(target string) bool {

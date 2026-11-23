@@ -21,8 +21,11 @@ go build -o wfn .
 wfn                 # show general help
 wfn help            # same as above
 wfn help <command>  # show detailed help for a specific command
+wfn --version       # print the version and exit
 wfn <command> [arguments]
 ```
+
+`--version` can appear anywhere on the command line; when it does, wfn prints its version and does nothing else. The version is set in `cmd/version.go`, and a release build can override it with `go build -ldflags "-X wfn/cmd.Version=1.2.3" -o wfn .`
 
 ## Commands
 
@@ -32,12 +35,13 @@ wfn <command> [arguments]
 | `codegen` | Generate a typed client for a webfunction package (targets: java, go, php, js, csharp, ruby, python; `--private` to include private endpoints, arguments, and attributes; `--file` to read the package from a local JSON file, though `--url` is still required; `--namespace` to set the namespace, package or module of the generated client); generics are expanded into concrete types |
 | `convert` | Convert a webfunction package to another document format (targets: openapi, postman; `--url` or `--file` for the package; `--private` to include private endpoints, arguments, and attributes; generics are expanded into concrete types) |
 | `validate` | Check a webfunction package's structure, flags, and generics usage, writing a report (formats: json, markdown, html; `--url` or `--file` for the package) |
+| `hash` | Write a hash of a webfunction package's content to a file, and do nothing else (`--url` or `--file` for the package; `--hashfile` for the file to write, required) |
 
 More commands will be added over time.
 
 ## Where the package comes from
 
-`convert` and `validate` take exactly one of:
+`convert`, `validate` and `hash` take exactly one of:
 
 - `--url <url>`: fetch the package from its package endpoint.
 - `--file <path>`: read a local JSON file holding the same document the
@@ -72,11 +76,32 @@ it onto its own convention, and `js` and `python` don't use it:
 | `go`     | a Go package name: lowercased, punctuation removed                  | `Acme.Billing_API` gives `package acmebillingapi` |
 | `java`   | a Java package: dot-separated, lowercased, punctuation removed      | `Acme.Billing_API` gives `package acme.billingapi;` |
 | `csharp` | a C# namespace: dot-separated, each segment PascalCased             | `Acme.Billing_API` gives `namespace Acme.BillingApi;` |
-| `ruby`   | the Ruby module name, used exactly as written (nest with `::`)      | `Acme::Billing` gives `module Acme::Billing` |
+| `ruby`   | a Ruby constant path: `::`-separated, each name starting with a capital letter (otherwise `codegen` fails); each name becomes a nested `module` | `Acme::Billing` gives `module Acme` containing `module Billing` |
 
 ```sh
 wfn codegen --target csharp --url https://example.com/pkg --namespace Acme.Billing -o Client.cs
 ```
+
+## Package hash
+
+`codegen`, `convert` and `validate` all accept `--hashfile <file>`, which writes
+a hash of the package content to that plain text file once the command has
+written its usual output. `wfn hash (--url <url> | --file <path>) --hashfile <file>`
+does only that: it writes the hash and nothing else (`--hashfile` is required).
+
+```sh
+wfn codegen --target go --url https://api.reservepay.com/merchants -o merchant.go --hashfile merchants.hash
+wfn hash --url https://api.reservepay.com/merchants --hashfile merchants.hash
+```
+
+The hash is taken from the very document the command worked on, so there is no
+second fetch that could return something different. It is the SHA-256 of the
+package document in canonical JSON (keys sorted, no insignificant whitespace,
+no HTML escaping), written as 64 lowercase hex digits followed by a newline.
+Whitespace and key order in the source therefore don't affect it, but any
+change to the content does. If the command fails before producing its output,
+no hash file is written; `validate` writes it whenever it writes its report,
+even when the report contains errors.
 
 ## Generics
 
@@ -123,7 +148,8 @@ itself, directly or through other generic objects (see the
 │   ├── codegen.go      # the "codegen" command
 │   ├── convert.go      # the "convert" command
 │   ├── generics_warning.go # generics warnings printed by convert and codegen
-│   ├── package_source.go   # loads a package from --url or --file, for all commands
+│   ├── hash.go         # the "hash" command
+│   ├── package_source.go   # loads a package from --url or --file, and hashes it, for all commands
 │   └── validate.go     # the "validate" command
 ├── csharpgen/          # codegen --target csharp
 ├── gogen/              # codegen --target go

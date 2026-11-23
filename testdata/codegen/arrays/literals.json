@@ -1,0 +1,28 @@
+{
+  "base_url": "https://api.example.com",
+  "name": "ArrayLiterals",
+  "objects": [
+    {
+      "name": "lits",
+      "attributes": [
+        { "name": "a_numbers", "type": "array", "values": [1, 2.5] },
+        { "name": "b_bools", "type": "array", "values": [true, false] },
+        { "name": "c_mixed", "type": "array", "values": ["a", 1] },
+        { "name": "d_with_null", "type": "array", "values": ["a", null] },
+        { "name": "e_any_items", "type": [["any"]], "values": ["x", "y"] },
+        { "name": "f_duplicates", "type": "array", "values": ["x", "x"] },
+        { "name": "g_union_with_array_first", "type": ["array", "string"], "values": ["x", "y"] }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "get-lits",
+      "returns": "object.lits",
+      "arguments": [
+        { "name": "a_num_choices", "type": "array", "choices": [1, 2] },
+        { "name": "b_required_choices", "type": "array", "choices": ["x", "y"], "flags": ["required"] }
+      ]
+    }
+  ]
+}

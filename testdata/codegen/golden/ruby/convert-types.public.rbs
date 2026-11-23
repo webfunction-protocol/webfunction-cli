@@ -50,7 +50,9 @@ module WebFunctionClient
   Undefined: untyped
 
   class Client
-    def initialize: (untyped real_client) -> void
+    SOURCE_URL: String
+
+    def initialize: (?untyped real_client, ?bearer_auth: String?, ?version: String?, ?pipelined: bool) -> void
     def self.from_package_endpoint: (String url, ?bearer_auth: String?, ?version: String?, ?pipelined: bool) -> Client
 
     def create_account: (email: String, ?id: String, ?homepage: String, ?feed: String, ?birthday: String, ?wake_time: String, ?last_login: String, ?phone: String, ?avatar: String, ?v4: String, ?v6: String, ?host: String, ?age: Integer, ?big: Integer, ?delta: Integer, ?huge_delta: Integer, ?ratio: Float, ?precise: Float, ?joined_at: Integer, ?score: Integer | Float, ?active: bool, ?anything: untyped, ?loose_list: Array[untyped], ?loose_object: Hash[Symbol, untyped], ?tags: Array[String], ?scores: Array[Integer | Float], ?nickname: String | nil, ?contact: String | Integer | Float, ?role: "admin" | "member" | "guest", ?level: 1 | 2 | 3, ?home: Hash[Symbol, untyped], ?previous_homes: Array[Hash[Symbol, untyped]]) -> AccountAttributes

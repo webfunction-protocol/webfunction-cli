@@ -9,8 +9,8 @@ import { Client } from 'webfunction';
 
 /**
  * @typedef {Object} SetTagsArgs
- * @property {("red"|"green"|"blue")} [tags]
- * @property {("red"|42)} [bad-tags]
+ * @property {Array<"red"|"green"|"blue">} [tags]
+ * @property {Array<"red"|42>} [bad-tags]
  */
 
 /**

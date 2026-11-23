@@ -33,6 +33,7 @@ Flags:
   --file       Path to a local webfunction package JSON file to validate instead of --url
   -o           Output file to write the report to (required)
   --format     Report format: json, markdown, or html (default: json)
+  --hashfile   Also write a hash of the package content to this file (see "wfn help hash")
 
 Exit status: non-zero if the report contains any error-severity finding
 (useful for CI), even though the report file is still written either way.
@@ -51,6 +52,7 @@ func (c *ValidateCommand) Run(args []string) error {
 	file := fs.String("file", "", "path to a webfunction package JSON file (instead of --url)")
 	output := fs.String("o", "", "output file name")
 	format := fs.String("format", "json", "report format ("+fmt.Sprint(validate.ValidFormats)+")")
+	hashfile := fs.String("hashfile", "", "write a hash of the package content to this file")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -98,6 +100,9 @@ func (c *ValidateCommand) Run(args []string) error {
 		return fmt.Errorf("writing %s: %w", *output, err)
 	}
 	fmt.Printf("Wrote %s\n", *output)
+	if err := loaded.writeHashFile(*hashfile); err != nil {
+		return err
+	}
 	fmt.Printf("%d error(s), %d warning(s), %d info note(s)\n", report.ErrorCount, report.WarningCount, report.InfoCount)
 
 	if report.Failed() {

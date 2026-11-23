@@ -60,11 +60,12 @@ type argResolver func(refName string) string
 // refs resolve to a loose `Hash[Symbol, untyped]` shape rather than a
 // dedicated type (v2 has no argument-side wrapper classes to point at -
 // see the package doc comment) - still real per-scalar precision
-// everywhere else (choices, numerics, nilability).
+// everywhere else (choices, numerics, nilability). Choices on an array
+// type are its allowed items, see choiceParts.
 func rbsArgType(t webfunction.Type, forceNullable bool, choices []interface{}) string {
 	var parts []string
 	if lits := literalUnion(choices); len(lits) > 0 {
-		parts = lits
+		parts = choiceParts(t, lits)
 	} else {
 		parts = make([]string, 0, len(t.Union))
 		for _, alt := range t.Union {
@@ -197,14 +198,24 @@ func (s *classSet) buildClass(className string, fields []field) *rubyClass {
 }
 
 // fieldType computes a field's RBS type plus, if applicable, the
-// wrapper class its raw value(s) should be instantiated as.
+// wrapper class its raw value(s) should be instantiated as. A field with
+// choices/values is typed from them (see choiceParts) and has no wrapper
+// class: its accessor returns the raw value.
 func (s *classSet) fieldType(f field) (rbsType, wrapClass string, isArray bool) {
 	if lits := literalUnion(f.choices); len(lits) > 0 {
-		t := strings.Join(dedupe(lits), " | ")
-		if f.nullable && !strings.Contains(t, "nil") {
-			t += " | nil"
+		parts := choiceParts(f.jsonType, lits)
+		// Whole union members, not a substring: an array of nilable items
+		// (Array["a" | nil]) does not make the field itself nilable.
+		hasNil := false
+		for _, p := range parts {
+			if p == "nil" {
+				hasNil = true
+			}
 		}
-		return t, "", false
+		if f.nullable && !hasNil {
+			parts = append(parts, "nil")
+		}
+		return strings.Join(dedupe(parts), " | "), "", false
 	}
 
 	rbsType, wrapClass, isArray = s.resolveType(f.jsonType)
@@ -291,6 +302,35 @@ func (s *classSet) arrayItemTypeOrScalar(t webfunction.Type) (rbsType, wrapClass
 
 // ---- shared helpers ----
 
+// choiceParts returns the members of the union type of a field that has a
+// closed set of legal values, lits being the literals from literalUnion.
+// Per the spec, when the type is (or includes) the array type, the values
+// are the allowed items of the array, so an array alternative becomes
+// Array[literals] (an explicit null among them makes the items nilable,
+// not the field). A union may mix an array with a scalar (e.g. ["string",
+// "array"]), and the spec does not say which the values belong to, so each
+// scalar alternative keeps the literals as well, in union order. An object
+// alternative has no literals to offer and is left out, as it always has
+// been when choices are present; a null alternative is added by the
+// caller. With no array alternative the literals stand for the whole type.
+func choiceParts(t webfunction.Type, lits []string) []string {
+	if !t.HasBase("array") {
+		return lits
+	}
+	items := "Array[" + strings.Join(dedupe(lits), " | ") + "]"
+	parts := make([]string, 0, len(t.Union)+len(lits))
+	for _, alt := range t.Union {
+		switch alt.Base {
+		case "array":
+			parts = append(parts, items)
+		case "object", "null":
+		default:
+			parts = append(parts, lits...)
+		}
+	}
+	return parts
+}
+
 func literalUnion(choices []interface{}) []string {
 	if len(choices) == 0 {
 		return nil
@@ -323,8 +363,12 @@ func rbsStringLiteral(s string) string {
 	return `"` + s + `"`
 }
 
+// rubyInterpolation escapes the three sequences Ruby interpolates inside a
+// double-quoted string ("#{...}", "#$gvar", "#@ivar"); RBS has no such rule.
+var rubyInterpolation = strings.NewReplacer("#{", `\#{`, "#$", `\#$`, "#@", `\#@`)
+
 func rubyStringLiteral(s string) string {
-	return rbsStringLiteral(s) // identical escaping rules
+	return rubyInterpolation.Replace(rbsStringLiteral(s))
 }
 
 func dedupe(ss []string) []string {

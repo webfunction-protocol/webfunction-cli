@@ -31,3 +31,18 @@ func writeDocComment(b *strings.Builder, indent, docs string) {
 		}
 	}
 }
+
+// joinDocLines joins the lines docLines returned into a single line, for
+// targets that render one line per error. Lines are separated by single
+// spaces and blank lines (paragraph breaks) are dropped, so the whole
+// description survives rather than only its first hard-wrapped source line.
+// docLines has already escaped each line, so joining keeps the escaping.
+func joinDocLines(lines []string) string {
+	parts := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if l = strings.TrimSpace(l); l != "" {
+			parts = append(parts, l)
+		}
+	}
+	return strings.Join(parts, " ")
+}

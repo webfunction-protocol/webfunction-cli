@@ -130,10 +130,10 @@ class SetTagsArgs:
     """SetTagsArgs holds the arguments for the set-tags endpoint.
     """
 
-    tags: Optional[Literal["red", "green", "blue"]] = field(default=None, metadata={"wire_name": "tags"})
+    tags: Optional[List[Literal["red", "green", "blue"]]] = field(default=None, metadata={"wire_name": "tags"})
     """One of: "red", "green", "blue".
     """
-    bad_tags: Optional[Literal["red", 42]] = field(default=None, metadata={"wire_name": "bad-tags"})
+    bad_tags: Optional[List[Literal["red", 42]]] = field(default=None, metadata={"wire_name": "bad-tags"})
     """One of: "red", 42, "red".
     """
 
@@ -157,7 +157,7 @@ class Client:
         self._raw = raw
 
     @classmethod
-    def new_client(cls, *, bearer_auth: Optional[str] = None, version: Optional[str] = None) -> "Client":
+    def create_new(cls, *, bearer_auth: Optional[str] = None, version: Optional[str] = None) -> "Client":
         """Builds a Client, fetching the package definition from its source URL.
         """
         raw = webfunction.Client.from_package_endpoint(cls._SOURCE_URL, bearer_auth=bearer_auth, version=version)
@@ -227,7 +227,7 @@ class AsyncClient:
         self._raw = raw
 
     @classmethod
-    async def new_client(cls, *, bearer_auth: Optional[str] = None, version: Optional[str] = None) -> "AsyncClient":
+    async def create_new(cls, *, bearer_auth: Optional[str] = None, version: Optional[str] = None) -> "AsyncClient":
         """Builds a AsyncClient, fetching the package definition from its source URL.
         """
         raw = await webfunction.AsyncClient.from_package_endpoint(cls._SOURCE_URL, bearer_auth=bearer_auth, version=version)

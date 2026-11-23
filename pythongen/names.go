@@ -142,7 +142,7 @@ func pythonFieldName(wireName string) string {
 var clientReserved = func() map[string]bool {
 	m := map[string]bool{
 		"call": true, "package": true, "bearer_auth": true, "version": true,
-		"pipeline": true, "new_client": true, "aclose": true, "close": true,
+		"pipeline": true, "create_new": true, "aclose": true, "close": true,
 	}
 	for k := range pythonKeywords {
 		m[strings.ToLower(k)] = true

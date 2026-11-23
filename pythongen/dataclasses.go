@@ -264,7 +264,11 @@ func (s *dataclassSet) renderFields(fields []field, resolve typeResolver) []data
 		nullable := f.optional
 		var typ string
 		var decodeExpr string
-		if len(f.choices) > 0 {
+		if len(f.choices) > 0 && f.jsonType.HasBase("array") {
+			// Per the spec the choices of an array are its allowed items,
+			// so the Literal is the item type and the field a List of it.
+			typ = arrayChoicesType(f, nullable, resolve)
+		} else if len(f.choices) > 0 {
 			literalExpr, usedLiteral, hasNull := buildLiteralField(f)
 			if hasNull {
 				nullable = true
@@ -367,6 +371,88 @@ func buildLiteralField(f field) (literalExpr string, usedLiteral bool, hasNull b
 		return "", false, hasNull
 	}
 	return "Literal[" + strings.Join(literals, ", ") + "]", true, hasNull
+}
+
+// arrayChoicesType renders an array field that has choices/values. The
+// choices are the allowed items, so an array alternative becomes
+// List[Literal[...]]. A union may mix an array with a scalar (e.g.
+// ["string", "array"]), and the spec does not say which the values belong
+// to, so each scalar alternative gets the Literal as well, in union order
+// (Python has real unions, so this is a Union[...] rather than a fallback
+// to Any). An explicit null among the items makes the items Optional, not
+// the field; an object alternative has no literals to offer and is left
+// out. When the choices cannot all be Literal members (see
+// arrayChoiceLiterals) the field keeps the type it would have without
+// choices, with the values noted in the docstring, as for a float scalar.
+func arrayChoicesType(f field, nullable bool, resolve typeResolver) string {
+	items, scalars, ok := arrayChoiceLiterals(f.choices)
+	if !ok {
+		return pythonType(f.jsonType, localTypes{}, nullable, resolve)
+	}
+	var parts []string
+	scalarDone := false
+	for _, alt := range f.jsonType.Union {
+		switch alt.Base {
+		case "null", "object":
+		case "array":
+			parts = append(parts, "List["+items+"]")
+		default:
+			if !scalarDone {
+				parts = append(parts, scalars)
+				scalarDone = true
+			}
+		}
+	}
+	typ := parts[0]
+	if len(parts) > 1 {
+		typ = "Union[" + strings.Join(parts, ", ") + "]"
+	}
+	if nullable {
+		typ = "Optional[" + typ + "]"
+	}
+	return typ
+}
+
+// arrayChoiceLiterals renders the choices of an array field as Literal
+// expressions: scalars is Literal[...] of the distinct non-null values,
+// items is the same, wrapped in Optional[...] when the choices include an
+// explicit null. A Literal can mix strings, ints and bools, but PEP 586
+// forbids floats, so ok is false for a fractional number, for any other
+// kind of value, and when there is nothing but null. Whole numbers are
+// int members.
+func arrayChoiceLiterals(choices []interface{}) (items, scalars string, ok bool) {
+	seen := map[string]bool{}
+	var literals []string
+	hasNull := false
+	for _, c := range choices {
+		switch v := c.(type) {
+		case nil:
+			hasNull = true
+			continue
+		case string, bool:
+		case float64:
+			if v != float64(int64(v)) {
+				return "", "", false
+			}
+		default:
+			return "", "", false
+		}
+		lit := pythonLiteral(c, "int")
+		if seen[lit] {
+			continue
+		}
+		seen[lit] = true
+		literals = append(literals, lit)
+	}
+	if len(literals) == 0 {
+		return "", "", false
+	}
+	scalars = "Literal[" + strings.Join(literals, ", ") + "]"
+	items = scalars
+	if hasNull {
+		items = "Optional[" + scalars + "]"
+	}
+	return items, scalars, true
 }
 
 // choicesNote renders a short "One of: ..." docstring note listing the

@@ -1,0 +1,21 @@
+{
+  "base_url": "https://api.example.com",
+  "name": "Numbers",
+  "objects": [
+    {
+      "name": "nums",
+      "attributes": [
+        { "name": "n_ints", "type": "number", "values": [1, 2] },
+        { "name": "n_frac", "type": "number", "values": [1, 2.5] },
+        { "name": "n_f64", "type": "number.f64", "values": [1, 2] },
+        { "name": "n_arr_int", "type": [["number"]], "values": [1, 2] },
+        { "name": "n_arr_f64", "type": [["number.f64"]], "values": [1, 2] },
+        { "name": "n_arr_frac", "type": [["number"]], "values": [1, 2.5] },
+        { "name": "n_arr_null_type", "type": ["array", "null"], "values": [1, 2] }
+      ]
+    }
+  ],
+  "endpoints": [
+    { "name": "get-nums", "returns": "object.nums", "arguments": [] }
+  ]
+}

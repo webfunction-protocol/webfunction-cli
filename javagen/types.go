@@ -152,13 +152,14 @@ func javaAltType(alt webfunction.TypeAlt, local localTypes, resolve typeResolver
 }
 
 // choiceWireType picks which Java type a generated enum's wire value
-// (its @JsonValue/@JsonCreator payload) should use, based on the field's
-// own declared type - not by inspecting the choices/values list itself.
-// Tying it to the field's type (rather than sniffing the values, which
-// Java's static enum can't represent as a mix anyway) keeps a choices-
-// enum's wire representation consistent with what the field's type
-// would have been without choices at all.
-func choiceWireType(t webfunction.Type) string {
+// (its @JsonValue/@JsonCreator payload) should use for a scalar field,
+// based on the field's own declared type rather than by sniffing the
+// choices/values list (which Java's static enum can't represent as a mix
+// anyway), keeping a choices-enum's wire representation consistent with
+// what the field's type would have been without choices at all. The one
+// thing it does look at is whether a number's choices include a fraction,
+// see numberWireType. Array fields use itemWireType instead.
+func choiceWireType(t webfunction.Type, choices []interface{}) string {
 	for _, alt := range t.Union {
 		switch alt.Base {
 		case "string":
@@ -166,13 +167,86 @@ func choiceWireType(t webfunction.Type) string {
 		case "boolean":
 			return "Boolean"
 		case "number":
-			if alt.Refinement == "f32" || alt.Refinement == "f64" {
-				return "Double"
-			}
-			return "Long"
+			return numberWireType(alt.Refinement, choices)
 		}
 	}
 	return "String"
+}
+
+// numberWireType picks Double for a number with an f32/f64 refinement or
+// with any non-integer choice (a Long wire value would truncate 2.5 to
+// 2L), and Long otherwise.
+func numberWireType(refinement string, choices []interface{}) string {
+	if refinement == "f32" || refinement == "f64" {
+		return "Double"
+	}
+	for _, c := range choices {
+		if v, ok := c.(float64); ok && v != float64(int64(v)) {
+			return "Double"
+		}
+	}
+	return "Long"
+}
+
+// isSingleArray reports whether t is an array and nothing else (a null
+// alternative aside). Java has no unions, so an array mixed with a scalar
+// is not one: it collapses to Object, and a closed set of values cannot be
+// an enum that stands for both.
+func isSingleArray(t webfunction.Type) bool {
+	n, array := 0, false
+	for _, alt := range t.Union {
+		if alt.Base == "null" {
+			continue
+		}
+		n++
+		if alt.Base == "array" {
+			array = true
+		}
+	}
+	return n == 1 && array
+}
+
+// itemWireType picks the wire type of the enum for the items of an array
+// field from its choices/values: String, Boolean, Long or Double (see
+// numberWireType; an f32/f64 refinement on the declared item type counts).
+// A null among the items is skipped, as in an enum. It returns "" when
+// there is nothing to build an enum from: no non-null choices, or items of
+// mixed kinds, which Java's static enum cannot represent.
+func itemWireType(t webfunction.Type, choices []interface{}) string {
+	kind := ""
+	for _, c := range choices {
+		var k string
+		switch c.(type) {
+		case nil:
+			continue
+		case string:
+			k = "String"
+		case bool:
+			k = "Boolean"
+		case float64:
+			k = "Number"
+		default:
+			return ""
+		}
+		if kind != "" && k != kind {
+			return ""
+		}
+		kind = k
+	}
+	if kind != "Number" {
+		return kind
+	}
+	refinement := ""
+	for _, alt := range t.Union {
+		if alt.Base == "array" && alt.Of != nil {
+			for _, item := range alt.Of.Union {
+				if item.Base == "number" {
+					refinement = item.Refinement
+				}
+			}
+		}
+	}
+	return numberWireType(refinement, choices)
 }
 
 // choiceConstantLabel derives a SCREAMING_SNAKE_CASE Java enum constant
